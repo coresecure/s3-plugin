@@ -189,7 +189,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
                 for (FilePath src : paths) {
                     final String fileName = getFilename(src, entry.flatten, workspacePath, entry.mappingPath, entry.removeHTML);
 
-                    log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName() + " region=" + selRegion + ", upload from slave=" + entry.uploadFromSlave + " managed="+ entry.managedArtifacts + " , server encryption "+entry.useServerSideEncryption);
+                    log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName() + ", fileName=" + fileName + " region=" + selRegion + ", upload from slave=" + entry.uploadFromSlave + " managed="+ entry.managedArtifacts + " , server encryption "+entry.useServerSideEncryption);
                     records.add(profile.upload(run, bucket, src, fileName, escapedMetadata, storageClass, selRegion, entry.uploadFromSlave, entry.managedArtifacts, entry.useServerSideEncryption, entry.gzipFiles));
                 }
 
@@ -227,7 +227,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
             fileName = relativeFileName.substring(workspacePath);
         }
         if (fileName.startsWith(mappedPath)) fileName = fileName.substring(mappedPath.length());
-        if (removeHTML) fileName = fileName.substring(0, fileName.toLowerCase().lastIndexOf(".html"));
+        if (removeHTML && fileName.toLowerCase().lastIndexOf(".html") > 0) fileName = fileName.substring(0, fileName.toLowerCase().lastIndexOf(".html"));
         return fileName;
     }
 

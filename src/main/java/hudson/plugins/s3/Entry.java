@@ -81,7 +81,7 @@ public final class Entry implements Describable<Entry> {
     public List<MetadataPair> userMetadata;
 
     @DataBoundConstructor
-    public Entry(String bucket, String sourceFile,String mappingPath, String excludedFile, String storageClass, String selectedRegion,
+    public Entry(String bucket, String sourceFile,String mappingPath,boolean removeHTML, String excludedFile, String storageClass, String selectedRegion,
                  boolean noUploadOnFailure, boolean uploadFromSlave, boolean managedArtifacts,
                  boolean useServerSideEncryption, boolean flatten, boolean gzipFiles, List<MetadataPair> userMetadata) {
         this.bucket = bucket;
@@ -95,6 +95,7 @@ public final class Entry implements Describable<Entry> {
         this.managedArtifacts = managedArtifacts;
         this.useServerSideEncryption = useServerSideEncryption;
         this.flatten = flatten;
+        this.removeHTML = removeHTML;
         this.gzipFiles = gzipFiles;
         this.userMetadata = userMetadata;
     }
