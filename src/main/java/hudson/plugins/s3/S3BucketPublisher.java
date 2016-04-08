@@ -187,7 +187,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
 
                 final int workspacePath = ws.getRemote().length() + 1;
                 for (FilePath src : paths) {
-                    final String fileName = getFilename(src, entry.flatten, workspacePath);
+                    final String fileName = getFilename(src, entry.flatten, workspacePath, entry.mappingPath);
 
                     log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName() + " region=" + selRegion + ", upload from slave=" + entry.uploadFromSlave + " managed="+ entry.managedArtifacts + " , server encryption "+entry.useServerSideEncryption);
                     records.add(profile.upload(run, bucket, src, fileName, escapedMetadata, storageClass, selRegion, entry.uploadFromSlave, entry.managedArtifacts, entry.useServerSideEncryption, entry.gzipFiles));
@@ -218,14 +218,15 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
         }
     }
 
-    private String getFilename(FilePath src, boolean flatten, int workspacePath) {
-        final String fileName;
+    private String getFilename(FilePath src, boolean flatten, int workspacePath, String mappedPath) {
+        String fileName;
         if (flatten) {
             fileName = src.getName();
         } else {
             final String relativeFileName = src.getRemote();
             fileName = relativeFileName.substring(workspacePath);
         }
+        if (fileName.startsWith(mappedPath)) fileName = fileName.substring(mappedPath.length());
         return fileName;
     }
 

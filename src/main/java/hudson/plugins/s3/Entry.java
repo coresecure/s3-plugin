@@ -20,6 +20,7 @@ public final class Entry implements Describable<Entry> {
      * Can contain macros and wildcards.
      */
     public String sourceFile;
+    public String mappingPath;
     /**
      * File name relative to the workspace root to be excluded from upload.
      * Can contain macros and wildcards.
@@ -79,11 +80,12 @@ public final class Entry implements Describable<Entry> {
     public List<MetadataPair> userMetadata;
 
     @DataBoundConstructor
-    public Entry(String bucket, String sourceFile, String excludedFile, String storageClass, String selectedRegion,
+    public Entry(String bucket, String sourceFile,String mappingPath, String excludedFile, String storageClass, String selectedRegion,
                  boolean noUploadOnFailure, boolean uploadFromSlave, boolean managedArtifacts,
                  boolean useServerSideEncryption, boolean flatten, boolean gzipFiles, List<MetadataPair> userMetadata) {
         this.bucket = bucket;
         this.sourceFile = sourceFile;
+        this.mappingPath =mappingPath;
         this.excludedFile = excludedFile;
         this.storageClass = storageClass;
         this.selectedRegion = selectedRegion;
