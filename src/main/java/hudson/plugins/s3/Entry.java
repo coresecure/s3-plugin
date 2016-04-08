@@ -21,6 +21,7 @@ public final class Entry implements Describable<Entry> {
      */
     public String sourceFile;
     public String mappingPath;
+    public boolean removeHTML;
     /**
      * File name relative to the workspace root to be excluded from upload.
      * Can contain macros and wildcards.
