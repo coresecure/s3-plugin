@@ -319,7 +319,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
     }
 
     private String getFilename(FilePath src, boolean flatten, int searchIndex, String mappedPath, boolean removeHTML) {
-        final String fileName;
+        String fileName;
         if (flatten) {
             fileName = src.getName();
         } else {
