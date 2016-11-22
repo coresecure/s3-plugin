@@ -226,8 +226,9 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
                         final int workspacePath = FileHelper.getSearchPathLength(ws.getRemote(),
                                 startPath.trim(),
                                 getProfile().isKeepStructure());
-                        filenames.add(getFilename(path, entry.flatten, workspacePath));
-                        log(console, "bucket=" + bucket + ", file=" + path.getName() + " region=" + selRegion + ", will be uploaded from slave=" + entry.uploadFromSlave + " managed=" + entry.managedArtifacts + " , server encryption " + entry.useServerSideEncryption);
+                        final String fileName= getFilename(path, entry.flatten, workspacePath, entry.mappingPath, entry.removeHTML);
+                        filenames.add(fileName);
+                        log(console, "bucket=" + bucket + ", file=" + path.getName() + ", fileName=" + fileName + " region=" + selRegion + ", will be uploaded from slave=" + entry.uploadFromSlave + " managed=" + entry.managedArtifacts + " , server encryption " + entry.useServerSideEncryption);
                     }
                 }
 
@@ -317,7 +318,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
         return escapedMetadata;
     }
 
-    private String getFilename(FilePath src, boolean flatten, int searchIndex) {
+    private String getFilename(FilePath src, boolean flatten, int searchIndex, String mappedPath, boolean removeHTML) {
         final String fileName;
         if (flatten) {
             fileName = src.getName();
@@ -325,6 +326,8 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
             final String relativeFileName = src.getRemote();
             fileName = relativeFileName.substring(searchIndex);
         }
+        if (fileName.startsWith(mappedPath)) fileName = fileName.substring(mappedPath.length());
+        if (removeHTML && fileName.toLowerCase().lastIndexOf(".html") > 0) fileName = fileName.substring(0, fileName.toLowerCase().lastIndexOf(".html"));
         return fileName;
     }
 
