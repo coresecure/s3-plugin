@@ -4,6 +4,7 @@ import hudson.FilePath;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import hudson.ProxyConfiguration;
+import hudson.plugins.s3.callable.*;
 import jenkins.model.Jenkins;
 import org.apache.commons.io.FilenameUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -26,8 +28,6 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.google.common.collect.Lists;
 
 import hudson.model.Run;
-import hudson.plugins.s3.callable.S3DownloadCallable;
-import hudson.plugins.s3.callable.S3UploadCallable;
 import hudson.util.Secret;
 
 public class S3Profile {
@@ -39,12 +39,13 @@ public class S3Profile {
     private final int maxDownloadRetries;
     private final int downloadRetryTime;
     private transient volatile AmazonS3Client client;
+    private final boolean keepStructure;
 
     private final boolean useRole;
     private final int signedUrlExpirySeconds;
 
     @DataBoundConstructor
-    public S3Profile(String name, String accessKey, String secretKey, boolean useRole, int signedUrlExpirySeconds, String maxUploadRetries, String uploadRetryTime, String maxDownloadRetries, String downloadRetryTime) {
+    public S3Profile(String name, String accessKey, String secretKey, boolean useRole, int signedUrlExpirySeconds, String maxUploadRetries, String uploadRetryTime, String maxDownloadRetries, String downloadRetryTime, boolean keepStructure) {
         this.name = name;
         this.useRole = useRole;
         this.maxUploadRetries = parseWithDefault(maxUploadRetries, 5);
@@ -59,6 +60,12 @@ public class S3Profile {
             this.accessKey = accessKey;
             this.secretKey = Secret.fromString(secretKey);
         }
+
+        this.keepStructure = keepStructure;
+    }
+
+    public boolean isKeepStructure() {
+        return keepStructure;
     }
 
     private int parseWithDefault(String number, int defaultValue) {
@@ -116,10 +123,10 @@ public class S3Profile {
         return client;
     }
 
-    public FingerprintRecord upload(Run<?, ?> run,
+    public List<FingerprintRecord> upload(Run<?, ?> run,
                                     final String bucketName,
-                                    final FilePath filePath,
-                                    final String fileName,
+                                    final List<FilePath> filePaths,
+                                    final List<String> fileNames,
                                     final Map<String, String> userMetadata,
                                     final String storageClass,
                                     final String selregion,
@@ -127,33 +134,74 @@ public class S3Profile {
                                     final boolean managedArtifacts,
                                     final boolean useServerSideEncryption,
                                     final boolean gzipFiles) throws IOException, InterruptedException {
-        if (filePath.isDirectory()) {
-            throw new IOException(filePath + " is a directory");
-        }
+        final List<FingerprintRecord> fingerprints = new ArrayList<>(fileNames.size());
 
-        final Destination dest;
-        final boolean produced;
-        if (managedArtifacts) {
-            dest = Destination.newFromRun(run, bucketName, fileName, true);
-            produced = run.getTimeInMillis() <= filePath.lastModified()+2000;
-        }
-        else {
-            dest = new Destination(bucketName, fileName);
-            produced = false;
-        }
+        try {
+            for (int i = 0; i < fileNames.size(); i++) {
+                final FilePath filePath = filePaths.get(i);
+                final String fileName = fileNames.get(i);
 
-        return repeat(maxUploadRetries, uploadRetryTime, dest, new Callable<FingerprintRecord>() {
-            public FingerprintRecord call() throws IOException, InterruptedException {
-                final S3UploadCallable callable = new S3UploadCallable(produced, fileName, accessKey, secretKey, useRole,
-                        bucketName, dest, userMetadata, storageClass, selregion, useServerSideEncryption, gzipFiles, getProxy());
-
-                if (uploadFromSlave) {
-                    return filePath.act(callable);
+                final Destination dest;
+                final boolean produced;
+                if (managedArtifacts) {
+                    dest = Destination.newFromRun(run, bucketName, fileName, true);
+                    produced = run.getTimeInMillis() <= filePath.lastModified() + 2000;
                 } else {
-                    return callable.invoke(filePath);
+                    dest = new Destination(bucketName, fileName);
+                    produced = false;
                 }
+
+                final MasterSlaveCallable<String> upload;
+                if (gzipFiles) {
+                    upload = new S3GzipCallable(accessKey, secretKey, useRole, dest, userMetadata,
+                            storageClass, selregion, useServerSideEncryption, getProxy());
+                } else {
+                    upload = new S3UploadCallable(accessKey, secretKey, useRole, dest, userMetadata,
+                            storageClass, selregion, useServerSideEncryption, getProxy());
+                }
+
+                final FingerprintRecord fingerprintRecord = repeat(maxUploadRetries, uploadRetryTime, dest, new Callable<FingerprintRecord>() {
+                    @Override
+                    public FingerprintRecord call() throws IOException, InterruptedException {
+                        final String md5 = invoke(uploadFromSlave, filePath, upload);
+                        return new FingerprintRecord(produced, bucketName, fileName, selregion, md5);
+                    }
+                });
+
+                fingerprints.add(fingerprintRecord);
             }
-        });
+
+            waitUploads(filePaths, uploadFromSlave);
+        } catch (InterruptedException | IOException exception) {
+            cleanupUploads(filePaths, uploadFromSlave);
+            throw exception;
+        }
+
+        return fingerprints;
+    }
+
+    private void cleanupUploads(final List<FilePath> filePaths, boolean uploadFromSlave) {
+        for (FilePath filePath : filePaths) {
+            try {
+                invoke(uploadFromSlave, filePath, new S3CleanupUploadCallable());
+            }
+            catch (InterruptedException | IOException ignored) {
+            }
+        }
+    }
+
+    private void waitUploads(final List<FilePath> filePaths, boolean uploadFromSlave) throws InterruptedException, IOException {
+        for (FilePath filePath : filePaths) {
+            invoke(uploadFromSlave, filePath, new S3WaitUploadCallable());
+        }
+    }
+
+    private <T> T invoke(boolean uploadFromSlave, FilePath filePath, MasterSlaveCallable<T> callable) throws InterruptedException, IOException {
+        if (uploadFromSlave) {
+            return filePath.act(callable);
+        } else {
+            return callable.invoke(filePath);
+        }
     }
 
     public List<String> list(Run build, String bucket) {
@@ -194,13 +242,14 @@ public class S3Profile {
           for(final FingerprintRecord record : artifacts) {
               final S3Artifact artifact = record.getArtifact();
               final Destination dest = Destination.newFromRun(build, artifact);
-              final FilePath target = getFilePath(targetDir, flatten, artifact);
+              final FilePath target = getFilePath(targetDir, flatten, artifact.getName());
 
               if (FileHelper.selected(includeFilter, excludeFilter, artifact.getName())) {
                   fingerprints.add(repeat(maxDownloadRetries, downloadRetryTime, dest, new Callable<FingerprintRecord>() {
                       @Override
                       public FingerprintRecord call() throws IOException, InterruptedException {
-                          return target.act(new S3DownloadCallable(accessKey, secretKey, useRole, dest, artifact.getRegion(), getProxy()));
+                          final String md5 = target.act(new S3DownloadCallable(accessKey, secretKey, useRole, dest, artifact.getRegion(), getProxy()));
+                          return new FingerprintRecord(true, dest.bucketName, target.getName(), artifact.getRegion(), md5);
                       }
                   }));
               }
@@ -224,48 +273,23 @@ public class S3Profile {
         }
     }
 
-    private FilePath getFilePath(FilePath targetDir, boolean flatten, S3Artifact artifact) {
+    private FilePath getFilePath(FilePath targetDir, boolean flatten, String fullName) {
         if (flatten) {
-            return new FilePath(targetDir, FilenameUtils.getName(artifact.getName()));
+            return new FilePath(targetDir, FilenameUtils.getName(fullName));
         }
         else  {
-            return new FilePath(targetDir, artifact.getName());
+            return new FilePath(targetDir, fullName);
         }
     }
 
     /**
        * Delete some artifacts of a given run
-       * @param run
-       * @param record
        */
       public void delete(Run run, FingerprintRecord record) {
           final Destination dest = Destination.newFromRun(run, record.getArtifact());
           final DeleteObjectRequest req = new DeleteObjectRequest(dest.bucketName, dest.objectName);
           getClient().deleteObject(req);
       }
-
-
-      /**
-       * Generate a signed download request for a redirect from s3/download.
-       *
-       * When the user asks to download a file, we sign a short-lived S3 URL
-       * for them and redirect them to it, so we don't have to proxy for the
-       * download and there's no need for the user to have credentials to
-       * access S3.
-       */
-      public String getDownloadURL(Run run, FingerprintRecord record) {
-          final Destination dest = Destination.newFromRun(run, record.getArtifact());
-          final GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(dest.bucketName, dest.objectName);
-          request.setExpiration(new Date(System.currentTimeMillis() + this.signedUrlExpirySeconds*1000));
-          final ResponseHeaderOverrides headers = new ResponseHeaderOverrides();
-          // let the browser use the last part of the name, not the full path
-          // when saving.
-          final String fileName = (new File(dest.objectName)).getName().trim();
-          headers.setContentDisposition("attachment; filename=\"" + fileName + '"');
-          request.setResponseHeaders(headers);
-          return getClient().generatePresignedUrl(request).toExternalForm();
-      }
-
 
     @Override
     public String toString() {

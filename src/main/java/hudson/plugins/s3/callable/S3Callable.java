@@ -5,15 +5,12 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 import hudson.FilePath.FileCallable;
 import hudson.ProxyConfiguration;
 import hudson.plugins.s3.ClientHelper;
-import hudson.plugins.s3.FingerprintRecord;
 import hudson.util.Secret;
 import org.jenkinsci.remoting.RoleChecker;
 
-import java.io.IOException;
 import java.util.HashMap;
 
-abstract class S3Callable implements FileCallable<FingerprintRecord>
-{
+abstract class S3Callable<T> implements FileCallable<T> {
     private static final long serialVersionUID = 1L;
 
     private final String accessKey;
@@ -24,8 +21,7 @@ abstract class S3Callable implements FileCallable<FingerprintRecord>
 
     private static transient HashMap<String, TransferManager> transferManagers = new HashMap<>();
 
-    S3Callable(String accessKey, Secret secretKey, boolean useRole, String region, ProxyConfiguration proxy)
-    {
+    S3Callable(String accessKey, Secret secretKey, boolean useRole, String region, ProxyConfiguration proxy) {
         this.accessKey = accessKey;
         this.secretKey = secretKey;
         this.useRole = useRole;
@@ -33,14 +29,14 @@ abstract class S3Callable implements FileCallable<FingerprintRecord>
         this.proxy = proxy;
     }
 
-    protected synchronized TransferManager getTransferManager()
-    {
-        if (transferManagers.get(region) == null) {
+    protected synchronized TransferManager getTransferManager() {
+        final String uniqueKey = getUniqueKey();
+        if (transferManagers.get(uniqueKey) == null) {
             final AmazonS3 client = ClientHelper.createClient(accessKey, Secret.toString(secretKey), useRole, region, proxy);
-            transferManagers.put(region, new TransferManager(client));
+            transferManagers.put(uniqueKey, new TransferManager(client));
         }
 
-        return transferManagers.get(region);
+        return transferManagers.get(uniqueKey);
     }
 
     @Override
@@ -48,7 +44,7 @@ abstract class S3Callable implements FileCallable<FingerprintRecord>
 
     }
 
-    public FingerprintRecord generateFingerprint(boolean produced, String bucket, String name, String md5sum) throws IOException {
-        return new FingerprintRecord(produced, bucket, name, region, md5sum);
+    private String getUniqueKey() {
+        return region + '_' + secretKey + '_' + accessKey + '_' + useRole;
     }
 }

@@ -72,8 +72,18 @@ public final class Entry implements Describable<Entry> {
     /**
     * use GZIP to compress files
     */
-
     public boolean gzipFiles;
+
+    /**
+     * show content of entity directly in browser
+     */
+    public boolean showDirectlyInBrowser;
+
+    /**
+     * Don't delete artifacts in Amazon after job was rotated
+     */
+
+    public boolean keepForever;
 
     /**
     * Metadata overrides
@@ -83,7 +93,8 @@ public final class Entry implements Describable<Entry> {
     @DataBoundConstructor
     public Entry(String bucket, String sourceFile,String mappingPath,boolean removeHTML, String excludedFile, String storageClass, String selectedRegion,
                  boolean noUploadOnFailure, boolean uploadFromSlave, boolean managedArtifacts,
-                 boolean useServerSideEncryption, boolean flatten, boolean gzipFiles, List<MetadataPair> userMetadata) {
+                 boolean useServerSideEncryption, boolean flatten, boolean gzipFiles, boolean keepForever,
+                 boolean showDirectlyInBrowser, List<MetadataPair> userMetadata) {
         this.bucket = bucket;
         this.sourceFile = sourceFile;
         this.mappingPath =mappingPath;
@@ -97,15 +108,18 @@ public final class Entry implements Describable<Entry> {
         this.flatten = flatten;
         this.removeHTML = removeHTML;
         this.gzipFiles = gzipFiles;
+        this.keepForever = keepForever;
         this.userMetadata = userMetadata;
+        this.showDirectlyInBrowser = showDirectlyInBrowser;
     }
 
+    @Override
     public Descriptor<Entry> getDescriptor() {
         return DESCRIPOR;
     }
 
     @Extension
-    public final static DescriptorImpl DESCRIPOR = new DescriptorImpl();
+    public static final DescriptorImpl DESCRIPOR = new DescriptorImpl();
 
     public static class DescriptorImpl extends  Descriptor<Entry> {
 
@@ -115,7 +129,7 @@ public final class Entry implements Describable<Entry> {
         }
 
         public ListBoxModel doFillStorageClassItems() {
-            ListBoxModel model = new ListBoxModel();
+            final ListBoxModel model = new ListBoxModel();
             for (String s : storageClasses) {
                 model.add(s, s);
             }
@@ -123,13 +137,12 @@ public final class Entry implements Describable<Entry> {
         }
 
         public ListBoxModel doFillSelectedRegionItems() {
-            ListBoxModel model = new ListBoxModel();
+            final ListBoxModel model = new ListBoxModel();
             for (Regions r : regions) {
                 model.add(r.getName(), r.getName());
             }
             return model;
         }
-
-    };
+    }
 
 }
