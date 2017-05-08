@@ -27,6 +27,11 @@ public final class Entry implements Describable<Entry> {
      * Can contain macros and wildcards.
      */
     public String excludedFile;
+
+    /**
+     * File will be ignored if the object exists in S3.
+     */
+    public boolean ignoreIfExists;
     /**
      * options for x-amz-storage-class can be STANDARD or REDUCED_REDUNDANCY
      */
@@ -91,7 +96,7 @@ public final class Entry implements Describable<Entry> {
     public List<MetadataPair> userMetadata;
 
     @DataBoundConstructor
-    public Entry(String bucket, String sourceFile,String mappingPath,boolean removeHTML, String excludedFile, String storageClass, String selectedRegion,
+    public Entry(String bucket, String sourceFile,String mappingPath,boolean removeHTML, String excludedFile, boolean ignoreIfExists, String storageClass, String selectedRegion,
                  boolean noUploadOnFailure, boolean uploadFromSlave, boolean managedArtifacts,
                  boolean useServerSideEncryption, boolean flatten, boolean gzipFiles, boolean keepForever,
                  boolean showDirectlyInBrowser, List<MetadataPair> userMetadata) {
@@ -107,6 +112,7 @@ public final class Entry implements Describable<Entry> {
         this.useServerSideEncryption = useServerSideEncryption;
         this.flatten = flatten;
         this.removeHTML = removeHTML;
+        this.ignoreIfExists = ignoreIfExists;
         this.gzipFiles = gzipFiles;
         this.keepForever = keepForever;
         this.userMetadata = userMetadata;

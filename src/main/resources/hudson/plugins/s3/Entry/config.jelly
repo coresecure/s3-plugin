@@ -12,6 +12,9 @@
         <f:entry title="Exclude" field="excludedFile">
             <f:textbox/>
         </f:entry>
+        <f:entry title="Ignore upload if file exists in S3" field="ignoreIfExists">
+                    <f:checkbox/>
+                </f:entry>
         <f:entry title="Destination bucket" field="bucket">
           <f:textbox/>
         </f:entry>

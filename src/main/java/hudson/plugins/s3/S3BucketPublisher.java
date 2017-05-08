@@ -3,6 +3,9 @@ package hudson.plugins.s3;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -227,8 +230,16 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
                                 startPath.trim(),
                                 getProfile().isKeepStructure());
                         final String fileName= getFilename(path, entry.flatten, workspacePath, entry.mappingPath, entry.removeHTML);
-                        filenames.add(fileName);
-                        log(console, "bucket=" + bucket + ", file=" + path.getName() + ", fileName=" + fileName + " region=" + selRegion + ", will be uploaded from slave=" + entry.uploadFromSlave + " managed=" + entry.managedArtifacts + " , server encryption " + entry.useServerSideEncryption);
+                        boolean ignoreUpload = false;
+                        if (entry.ignoreIfExists) {
+                            ignoreUpload = checkFileExists(bucket,fileName,console) ;
+                        }
+                        log(console, "ignoreUpload=" + ignoreUpload);
+                        if (!ignoreUpload) {
+                            log(console, "bucket=" + bucket + ", file=" + path.getName() + ", fileName=" + fileName + " region=" + selRegion + ", will be uploaded from slave=" + entry.uploadFromSlave + " managed=" + entry.managedArtifacts + " , server encryption " + entry.useServerSideEncryption);
+                            filenames.add(fileName);
+                        }
+
                     }
                 }
 
@@ -329,6 +340,29 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
         if (fileName.startsWith(mappedPath)) fileName = fileName.substring(mappedPath.length());
         if (removeHTML && fileName.toLowerCase().lastIndexOf(".html") > 0) fileName = fileName.substring(0, fileName.toLowerCase().lastIndexOf(".html"));
         return fileName;
+    }
+
+
+    private boolean checkFileExists(String bucketName, String fileName, PrintStream console){
+        boolean fileExists = false;
+        final S3Profile profile = this.getProfile();
+        AmazonS3  s3 = profile.getClient();
+        try {
+            log(console, "  *** bucketName: " + bucketName + "***  file name "+fileName );
+
+            ObjectMetadata objectMetadata = s3.getObjectMetadata(bucketName, fileName);
+            fileExists=true;  //hacky way
+        } catch (AmazonS3Exception s3e) {
+            log(console, "exception in checking file exist in S3 ***: " +s3e.getStatusCode());
+            if (s3e.getStatusCode() == 404) {
+                // i.e. 404: NoSuchKey - The specified key does not exist
+                fileExists = false;
+            }
+        } catch (Exception ex) {
+            log(console, "exception in checking file exist in S3 ***: " );
+        }
+        log(console, "object exsits  : " + fileExists  );
+        return fileExists;
     }
 
     @Extension
