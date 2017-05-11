@@ -225,7 +225,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
                             throw new IOException(path + " is a directory");
                         }
 
-                        paths.add(path);
+
                         final int workspacePath = FileHelper.getSearchPathLength(ws.getRemote(),
                                 startPath.trim(),
                                 getProfile().isKeepStructure());
@@ -236,6 +236,7 @@ public final class S3BucketPublisher extends Recorder implements SimpleBuildStep
                         }
                         log(console, "ignoreUpload=" + ignoreUpload);
                         if (!ignoreUpload) {
+                            paths.add(path);
                             log(console, "bucket=" + bucket + ", file=" + path.getName() + ", fileName=" + fileName + " region=" + selRegion + ", will be uploaded from slave=" + entry.uploadFromSlave + " managed=" + entry.managedArtifacts + " , server encryption " + entry.useServerSideEncryption);
                             filenames.add(fileName);
                         }
